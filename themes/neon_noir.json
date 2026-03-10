@@ -1,0 +1,15 @@
+{
+    "name": "Neon Noir",
+    "description": "Black background with high-contrast red roads and green parks",
+    "bg": "#000000",
+    "text": "#FFFFFF",
+    "gradient_color": "#1A1A1A",
+    "water": "#1A1A1A",
+    "parks": "#004D00",
+    "road_motorway": "#FF0000",
+    "road_primary": "#FF3333",
+    "road_secondary": "#CC0000",
+    "road_tertiary": "#990000",
+    "road_residential": "#404040",
+    "road_default": "#333333"
+}
