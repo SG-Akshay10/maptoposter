@@ -524,7 +524,7 @@ def create_poster(
 
     # Progress bar for data fetching
     with tqdm(
-        total=3,
+        total=5,
         desc="Fetching map data",
         unit="step",
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}",
@@ -552,8 +552,31 @@ def create_poster(
         parks = fetch_features(
             point,
             compensated_dist,
-            tags={"leisure": "park", "landuse": "grass"},
+            tags={"leisure": "park", "landuse": ["grass", "forest", "meadow", "village_green"]},
             name="parks",
+        )
+        pbar.update(1)
+
+        # 4. Fetch Landmarks (historic, tourism, major amenities)
+        pbar.set_description("Downloading landmarks")
+        landmarks = fetch_features(
+            point,
+            compensated_dist,
+            tags={
+                "historic": ["monument", "castle", "ruins", "memorial", "fort", "building"],
+                "tourism": ["museum", "attraction", "gallery"],
+            },
+            name="landmarks",
+        )
+        pbar.update(1)
+
+        # 5. Fetch Beaches
+        pbar.set_description("Downloading beaches")
+        beaches = fetch_features(
+            point,
+            compensated_dist,
+            tags={"natural": ["beach", "sand", "shoal", "coastline"]},
+            name="beaches",
         )
         pbar.update(1)
 
@@ -569,11 +592,20 @@ def create_poster(
     g_proj = ox.project_graph(g)
 
     # 3. Plot Layers
+    # Helper to clip geometries before projection to avoid UTM wrap-around for huge polygons (e.g. Bay of Bengal)
+    from shapely.geometry import box
+    bbox = ox.utils_geo.bbox_from_point(point, dist=compensated_dist * 1.5)
+    clip_box = box(bbox[3], bbox[1], bbox[2], bbox[0])
+
     # Layer 1: Polygons (filter to only plot polygon/multipolygon geometries, not points)
     if water is not None and not water.empty:
         # Filter to only polygon/multipolygon geometries to avoid point features showing as dots
         water_polys = water[water.geometry.type.isin(["Polygon", "MultiPolygon"])]
         if not water_polys.empty:
+            try:
+                water_polys = water_polys.clip(clip_box)
+            except Exception as e:
+                print(f"Warning clipping water: {e}")
             # Project water features in the same CRS as the graph
             try:
                 water_polys = ox.projection.project_gdf(water_polys)
@@ -585,12 +617,49 @@ def create_poster(
         # Filter to only polygon/multipolygon geometries to avoid point features showing as dots
         parks_polys = parks[parks.geometry.type.isin(["Polygon", "MultiPolygon"])]
         if not parks_polys.empty:
+            try:
+                parks_polys = parks_polys.clip(clip_box)
+            except Exception as e:
+                print(f"Warning clipping parks: {e}")
             # Project park features in the same CRS as the graph
             try:
                 parks_polys = ox.projection.project_gdf(parks_polys)
             except Exception:
                 parks_polys = parks_polys.to_crs(g_proj.graph['crs'])
-            parks_polys.plot(ax=ax, facecolor=THEME['parks'], edgecolor='none', zorder=0.8)
+            parks_polys.plot(ax=ax, facecolor=THEME.get('parks', '#E8E0D0'), edgecolor='none', zorder=0.8)
+
+    if landmarks is not None and not landmarks.empty:
+        # Filter to only polygon/multipolygon geometries to avoid point features showing as dots
+        landmarks_polys = landmarks[landmarks.geometry.type.isin(["Polygon", "MultiPolygon"])]
+        if not landmarks_polys.empty:
+            try:
+                landmarks_polys = landmarks_polys.clip(clip_box)
+            except Exception as e:
+                print(f"Warning clipping landmarks: {e}")
+            # Project landmark features in the same CRS as the graph
+            try:
+                landmarks_polys = ox.projection.project_gdf(landmarks_polys)
+            except Exception:
+                landmarks_polys = landmarks_polys.to_crs(g_proj.graph['crs'])
+            # Use 'buildings' color from theme if provided, otherwise fallback to 'landmarks' highlight color
+            landmarks_polys.plot(ax=ax, facecolor=THEME.get('buildings', THEME.get('landmarks', '#FFD700')), edgecolor='none', zorder=0.9)
+
+    if beaches is not None and not beaches.empty:
+        # Filter to only polygon/multipolygon geometries to avoid point features showing as dots
+        beaches_polys = beaches[beaches.geometry.type.isin(["Polygon", "MultiPolygon"])]
+        if not beaches_polys.empty:
+            try:
+                beaches_polys = beaches_polys.clip(clip_box)
+            except Exception as e:
+                print(f"Warning clipping beaches: {e}")
+            # Project beach features in the same CRS as the graph
+            try:
+                beaches_polys = ox.projection.project_gdf(beaches_polys)
+            except Exception:
+                beaches_polys = beaches_polys.to_crs(g_proj.graph['crs'])
+            # Use 'beaches' color from theme, override 'beaches' with yellow fallback
+            beaches_polys.plot(ax=ax, facecolor=THEME.get('beaches', '#FFFF00'), edgecolor='none', zorder=0.6)
+
     # Layer 2: Roads with hierarchy coloring
     print("Applying road hierarchy colors...")
     edge_colors = get_edge_colors_by_type(g_proj)

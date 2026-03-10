@@ -35,3 +35,7 @@ htmlcov/
 .pytest_cache/
 
 posters/
+test_plot_water.py
+test_plot.png
+test_water_bounds.py
+test_water.py
